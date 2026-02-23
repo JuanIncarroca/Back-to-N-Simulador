@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocolos de Transporte: GBN vs SR</title>
+    <title>Simulador de Protocolos ARQ: GBN vs SR</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -25,403 +25,361 @@
             background-color: var(--bg-body);
             color: var(--text-main);
             margin: 0;
-            line-height: 1.5;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        /* --- Encabezado --- */
-        .header {
-            text-align: center;
-            margin-bottom: 50px;
-        }
-        .header h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--text-main); }
-        .header p { color: var(--text-muted); font-size: 1.1rem; }
-
-        /* --- Sección de Teoría --- */
-        .theory-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 60px;
-        }
-
-        .theory-card {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-
-        .theory-card h2 { margin-top: 0; display: flex; align-items: center; gap: 10px; }
-        .theory-card.gbn h2 { color: var(--primary); }
-        .theory-card.sr h2 { color: var(--secondary); }
-        
-        .theory-card ul { padding-left: 20px; color: var(--text-muted); font-size: 0.95rem; }
-        .theory-card li { margin-bottom: 10px; }
-
-        /* --- Simulador Principal --- */
-        .simulator-box {
-            background: white;
-            border-radius: 24px;
-            border: 1px solid var(--border);
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-            overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 750px;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        /* Toolbar del Simulador */
-        .sim-toolbar {
-            padding: 16px 24px;
+        .app-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 300px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar Izquierda */
+        .sidebar-left {
+            background: white;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .theory-section {
+            background: var(--bg-body);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            border: 1px solid var(--border);
+            line-height: 1.4;
+        }
+
+        .theory-section h3 { margin: 0 0 8px 0; font-size: 0.9rem; color: var(--primary); }
+
+        /* Area Principal */
+        .main-view {
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            position: relative;
+        }
+
+        .toolbar {
+            padding: 10px 20px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #fff;
-        }
-
-        .mode-selector {
-            display: flex;
-            background: var(--bg-body);
-            padding: 4px;
-            border-radius: 12px;
-        }
-
-        .mode-btn {
-            border: none;
-            padding: 8px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: 0.2s;
-            background: transparent;
-            color: var(--text-muted);
-        }
-
-        .mode-btn.active.gbn { background: var(--primary); color: white; }
-        .mode-btn.active.sr { background: var(--secondary); color: white; }
-
-        /* Cuerpo del Simulador (Tres Columnas) */
-        .sim-content {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 280px 1fr 300px;
-            overflow: hidden;
-        }
-
-        .sim-controls {
-            padding: 24px;
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            background: #fafafa;
-        }
-
-        /* Lienzo de Animación */
-        .sim-canvas {
-            position: relative;
-            overflow-y: auto;
             background: white;
+            z-index: 30;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .canvas-area {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            background: #ffffff;
             scroll-behavior: smooth;
         }
 
-        .node-labels {
-            position: sticky;
-            top: 0;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(8px);
-            display: flex;
-            justify-content: space-around;
-            padding: 15px 0;
-            border-bottom: 1px solid var(--border);
-            z-index: 10;
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        /* Log de Eventos */
-        .sim-log {
-            padding: 20px;
-            border-left: 1px solid var(--border);
+        /* Sidebar Derecha (Logs) */
+        .sidebar-right {
             background: #fdfdfd;
+            border-left: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            font-size: 0.85rem;
-        }
-
-        .log-header {
-            font-weight: 800;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 15px;
         }
 
         #log-container {
             flex: 1;
             overflow-y: auto;
+            font-size: 0.8rem;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
 
-        .log-entry {
-            padding: 10px;
-            border-radius: 8px;
-            background: white;
-            border: 1px solid var(--border);
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
-
-        .log-info { border-left: 4px solid var(--primary); }
-        .log-success { border-left: 4px solid var(--success); }
-        .log-error { border-left: 4px solid var(--danger); }
-        .log-warning { border-left: 4px solid var(--warning); }
-
-        /* Elementos de Red */
-        .lifeline {
+        /* Elementos del Diagrama */
+        .node-line {
             position: absolute;
             top: 0; bottom: 0; width: 2px;
-            background: repeating-linear-gradient(to bottom, transparent, transparent 10px, var(--border) 10px, var(--border) 20px);
+            background: #cbd5e1;
         }
 
-        /* Botones y UI */
+        .packet-label {
+            position: absolute;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: white;
+            border: 1px solid currentColor;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        /* Botones */
         .btn {
-            width: 100%;
-            padding: 12px;
-            border-radius: 10px;
+            padding: 10px;
+            border-radius: 8px;
             border: none;
             font-weight: 600;
             cursor: pointer;
+            width: 100%;
             transition: 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+            font-size: 0.85rem;
         }
         .btn-primary { background: var(--primary); color: white; }
-        .btn-secondary { background: var(--secondary); color: white; }
-        .btn-outline { border: 1px solid var(--border); background: white; color: var(--text-muted); }
-        .btn-outline:hover { background: var(--bg-body); }
-        .btn-danger-light { background: #fef2f2; color: var(--danger); border: 1px solid #fee2e2; }
-        .btn-danger-light.active { background: var(--danger); color: white; }
-
-        .packet-label {
-            position: absolute;
-            font-size: 0.7rem;
-            font-weight: 800;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: white;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            z-index: 5;
-            white-space: nowrap;
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger-outline { border: 2px solid var(--danger); background: transparent; color: var(--danger); font-size: 0.75rem; }
+        .btn-danger-outline.active { background: var(--danger); color: white; }
+        .btn-auto { background: #1e293b; color: white; }
+        .btn-auto.active { background: var(--success); }
+        
+        .mode-switch {
+            display: flex;
+            background: var(--bg-body);
+            padding: 4px;
+            border-radius: 8px;
         }
+        .mode-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: 0.2s;
+        }
+        .mode-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: var(--primary); }
 
-        #timer-bar {
+        #timer-progress {
             height: 4px;
             background: var(--warning);
             width: 0%;
+            position: absolute;
+            top: 0; left: 0;
             transition: width 0.1s linear;
+            z-index: 40;
         }
 
-        /* Monitor de Ventanas */
-        .window-status {
+        /* Logs */
+        .log-entry {
+            padding: 8px;
+            border-radius: 6px;
+            border-left: 4px solid var(--border);
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .log-timeout { border-left-color: var(--danger); background: #fff1f2; }
+        .log-ack { border-left-color: var(--success); }
+
+        /* Grid de paquetes */
+        .packet-grid {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            gap: 4px;
+            flex-wrap: wrap;
             margin-top: 10px;
         }
-        .pkt-box {
+        .pkt-status {
             width: 24px; height: 24px;
             border: 1px solid var(--border);
-            border-radius: 4px;
             display: flex; align-items: center; justify-content: center;
             font-size: 0.7rem; font-weight: bold;
+            border-radius: 4px;
+            transition: 0.3s;
         }
-        .pkt-in-window { border-color: var(--primary); background: var(--primary-light); }
+        .pkt-in-win { border-color: var(--primary); background: var(--primary-light); }
         .pkt-acked { background: var(--success); color: white; border-color: var(--success); }
+
+        input[type="number"], input[type="range"] {
+            accent-color: var(--primary);
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <header class="header">
-        <h1>Protocolos de Ventana Deslizante</h1>
-        <p>Visualiza cómo funcionan los mecanismos de confiabilidad en la capa de transporte.</p>
-    </header>
-
-    <section class="theory-section">
-        <div class="theory-card gbn">
-            <h2>Go-Back-N (GBN)</h2>
-            <p>El emisor puede transmitir hasta N paquetes sin confirmación.</p>
-            <ul>
-                <li><b>ACK Acumulativo:</b> Confirma que todos los paquetes hasta <i>n</i> se recibieron bien.</li>
-                <li><b>Sin Buffer en Receptor:</b> Si falta un paquete, los siguientes se descartan.</li>
-                <li><b>Timeout:</b> Si falla uno, se reenvía <b>toda</b> la ventana actual.</li>
-            </ul>
+<div class="app-container">
+    <aside class="sidebar-left">
+        <h2 style="margin:0; font-size: 1.1rem;">Configuración</h2>
+        
+        <div class="theory-section">
+            <h3>Protocolos</h3>
+            <p><strong>GBN:</strong> Retransmisión acumulativa si hay error o pérdida.</p>
+            <p><strong>SR:</strong> Solo reenvía paquetes individuales no confirmados.</p>
         </div>
-        <div class="theory-card sr">
-            <h2>Selective Repeat (SR)</h2>
-            <p>Optimiza reenviando solo lo estrictamente necesario.</p>
-            <ul>
-                <li><b>ACK Individual:</b> Cada paquete se confirma independientemente.</li>
-                <li><b>Buffer de Recepción:</b> El receptor guarda paquetes desordenados mientras espera el faltante.</li>
-                <li><b>Reenvío Específico:</b> Solo se retransmite el paquete que falló.</li>
-            </ul>
-        </div>
-    </section>
 
-    <div class="simulator-box">
-        <div id="timer-bar"></div>
-        <div class="sim-toolbar">
-            <div class="mode-selector">
-                <button id="btn-gbn" class="mode-btn active gbn">Go-Back-N</button>
-                <button id="btn-sr" class="mode-btn sr">Selective Repeat</button>
-            </div>
-            <div style="font-size: 0.9rem; font-weight: 600;">
-                Estado: <span id="status-text" style="color: var(--primary);">MODO GBN</span>
+        <div>
+            <label style="display:block; font-size:0.7rem; font-weight:bold; margin-bottom:4px;">PAQUETES TOTALES</label>
+            <input type="number" id="total-pkts" value="20" min="5" max="100" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border);">
+        </div>
+
+        <div style="background: #f1f5f9; padding: 12px; border-radius: 10px;">
+            <label style="display:block; font-size:0.7rem; font-weight:bold; margin-bottom:4px; color: #475569;">ENVÍO AUTOMÁTICO</label>
+            <button id="btn-auto" class="btn btn-auto">
+                <span id="auto-icon">▶</span> <span id="auto-text">Iniciar Auto</span>
+            </button>
+            <input type="range" id="auto-speed" min="500" max="3000" step="100" value="1500" style="width:100%; margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#64748b;">
+                <span>Rápido</span><span>Lento</span>
             </div>
         </div>
 
-        <div class="sim-content">
-            <aside class="sim-controls">
-                <div>
-                    <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted);">VENTANA (N)</label>
-                    <input type="range" id="win-range" min="2" max="6" value="4" style="width: 100%; margin-top: 8px;">
-                    <div style="text-align: right; font-weight: bold; font-size: 0.8rem;" id="win-val">4</div>
-                </div>
-
-                <button id="btn-next" class="btn btn-primary">ENVIAR PAQUETE</button>
-                <button id="btn-auto" class="btn btn-outline">MODO AUTO</button>
-                
-                <hr style="border: 0; border-top: 1px solid var(--border); margin: 5px 0;">
-                
-                <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted);">SIMULAR FALLOS</label>
-                <button id="fail-pkt" class="btn btn-danger-light">PERDER PKT</button>
-                <button id="fail-ack" class="btn btn-danger-light">PERDER ACK</button>
-
-                <div class="window-status">
-                    <span style="font-size: 0.7rem; font-weight: 800;">ESTADO TX</span>
-                    <div id="tx-window" style="display: flex; gap: 4px; flex-wrap: wrap;"></div>
-                </div>
-
-                <button onclick="location.reload()" class="btn btn-outline" style="margin-top: auto;">REINICIAR</button>
-            </aside>
-
-            <main class="sim-canvas" id="canvas">
-                <div class="node-labels">
-                    <span>EMISOR (CLIENTE)</span>
-                    <span>RECEPTOR (SERVIDOR)</span>
-                </div>
-                
-                <div id="tx-line" class="lifeline"></div>
-                <div id="rx-line" class="lifeline"></div>
-
-                <svg id="svg-lines" style="position: absolute; top: 0; left: 0; width: 100%; height: 5000px; pointer-events: none;">
-                    <defs>
-                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
-                        </marker>
-                    </defs>
-                </svg>
-                <div id="labels-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
-            </main>
-
-            <aside class="sim-log">
-                <div class="log-header">
-                    <span>LOG DE EVENTOS</span>
-                    <button id="clear-log" style="background: none; border: none; font-size: 0.7rem; color: var(--primary); cursor: pointer;">Limpiar</button>
-                </div>
-                <div id="log-container">
-                    <div class="log-entry log-info">Simulador iniciado en modo GBN.</div>
-                </div>
-            </aside>
+        <button id="btn-send" class="btn btn-primary">ENVIAR PAQUETE</button>
+        <button id="btn-timeout" class="btn btn-warning">⚠️ FORZAR TIMEOUT</button>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button id="fail-pkt" class="btn btn-danger-outline">PERDER PKT</button>
+            <button id="fail-ack" class="btn btn-danger-outline">PERDER ACK</button>
         </div>
-    </div>
+
+        <div>
+            <label style="display:block; font-size:0.7rem; font-weight:bold; margin-bottom:4px;">TAMAÑO VENTANA (N)</label>
+            <input type="range" id="win-size" min="2" max="10" value="4" style="width:100%;">
+            <div id="win-label" style="text-align:right; font-weight:bold; font-size: 0.8rem;">4</div>
+        </div>
+
+        <div style="margin-top:5px;">
+            <span style="font-size: 0.7rem; font-weight: bold;">ESTADO DE LA VENTANA</span>
+            <div id="tx-window-grid" class="packet-grid"></div>
+        </div>
+    </aside>
+
+    <main class="main-view">
+        <div id="timer-progress"></div>
+        <div class="toolbar">
+            <div class="mode-switch">
+                <button id="mode-gbn" class="mode-btn active">Go-Back-N</button>
+                <button id="mode-sr" class="mode-btn">Selective Repeat</button>
+            </div>
+            
+            <div class="nav-actions">
+                <div id="status-display" style="font-weight: bold; font-size: 0.9rem; background: var(--bg-body); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);">
+                    🏁 <span id="count-sent">0</span> / <span id="count-max">20</span>
+                </div>
+                <button onclick="location.reload()" class="btn btn-danger" style="width: auto; padding: 6px 15px; font-size: 0.8rem;">
+                    🔄 REINICIAR
+                </button>
+            </div>
+        </div>
+
+        <div class="canvas-area" id="canvas">
+            <div style="display:flex; justify-content: space-around; padding: 12px; font-weight: 800; color: var(--text-muted); position: sticky; top: 0; background: rgba(255,255,255,0.95); z-index: 10; border-bottom: 1px solid var(--border); font-size: 0.8rem;">
+                <span>EMISOR (TX)</span>
+                <span>RECEPTOR (RX)</span>
+            </div>
+
+            <div id="line-tx" class="node-line"></div>
+            <div id="line-rx" class="node-line"></div>
+
+            <svg id="svg-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 10000px; pointer-events: none;">
+                <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                        <path d="M0,0 L10,5 L0,10 Z" fill="currentColor" />
+                    </marker>
+                </defs>
+            </svg>
+            <div id="labels-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
+        </div>
+    </main>
+
+    <aside class="sidebar-right">
+        <h3 style="margin:0 0 10px 0; font-size: 0.9rem; display: flex; justify-content: space-between;">
+            Historial de Red
+            <button onclick="document.getElementById('log-container').innerHTML=''" style="border:none; background:none; cursor:pointer; font-size: 0.7rem; color: var(--danger);">Limpiar</button>
+        </h3>
+        <div id="log-container"></div>
+    </aside>
 </div>
 
 <script>
     const canvas = document.getElementById('canvas');
-    const svg = document.getElementById('svg-lines');
-    const labelsLayer = document.getElementById('labels-layer');
+    const svg = document.getElementById('svg-layer');
     const logContainer = document.getElementById('log-container');
     
     let config = {
         mode: 'GBN',
         windowSize: 4,
-        txX: 0,
-        rxX: 0,
-        y: 80,
-        step: 60,
-        slope: 80,
-        timeout: 4000
+        maxPackets: 20,
+        timeoutMs: 4000,
+        txX: 0, rxX: 0,
+        y: 80, slope: 70, step: 60
     };
 
     let state = {
         base: 0,
         nextSeq: 0,
         expected: 0,
-        nextError: null,
-        auto: false,
+        txAcked: new Set(),
+        rxBuffered: new Set(),
         timer: null,
         timerStart: 0,
-        txAcked: new Set(),
-        rxBuffered: new Set()
+        errorNext: null,
+        isAuto: false,
+        autoInterval: null
     };
 
-    function addLog(msg, type = 'info') {
-        const div = document.createElement('div');
-        div.className = `log-entry log-${type}`;
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        div.innerHTML = `<small style="display:block;color:var(--text-muted);margin-bottom:2px">${time}</small>${msg}`;
-        logContainer.prepend(div);
-    }
-
     function init() {
-        updatePositions();
-        window.onresize = updatePositions;
-        renderWindowUI();
+        updateScales();
+        window.onresize = updateScales;
+        renderWindow();
+        addLog("Simulador iniciado. Configure los parámetros y use el Envío Automático.");
+        document.getElementById('count-max').textContent = config.maxPackets;
     }
 
-    function updatePositions() {
+    function updateScales() {
         const rect = canvas.getBoundingClientRect();
         config.txX = rect.width * 0.25;
         config.rxX = rect.width * 0.75;
-        document.getElementById('tx-line').style.left = config.txX + 'px';
-        document.getElementById('rx-line').style.left = config.rxX + 'px';
+        document.getElementById('line-tx').style.left = config.txX + 'px';
+        document.getElementById('line-rx').style.left = config.rxX + 'px';
     }
 
-    function renderWindowUI() {
-        const container = document.getElementById('tx-window');
-        container.innerHTML = '';
-        for(let i=0; i < Math.max(state.base + 10, 10); i++) {
-            const div = document.createElement('div');
-            div.className = 'pkt-box';
-            if (i >= state.base && i < state.base + config.windowSize) div.classList.add('pkt-in-window');
-            if (config.mode === 'GBN' ? i < state.base : state.txAcked.has(i)) div.classList.add('pkt-acked');
-            div.textContent = i;
-            container.appendChild(div);
+    function addLog(msg, type = '') {
+        const div = document.createElement('div');
+        div.className = `log-entry ${type ? 'log-'+type : ''}`;
+        div.innerHTML = `<span style="font-size:0.6rem; color:gray; display:block;">${new Date().toLocaleTimeString()}</span>${msg}`;
+        logContainer.prepend(div);
+        if(logContainer.children.length > 50) logContainer.lastChild.remove();
+    }
+
+    function renderWindow() {
+        const grid = document.getElementById('tx-window-grid');
+        grid.innerHTML = '';
+        const displayLimit = Math.min(config.maxPackets, 40); 
+        for(let i=0; i < displayLimit; i++) {
+            const d = document.createElement('div');
+            d.className = 'pkt-status';
+            if(i >= state.base && i < state.base + config.windowSize) d.classList.add('pkt-in-win');
+            if(config.mode === 'GBN' ? i < state.base : state.txAcked.has(i)) d.classList.add('pkt-acked');
+            d.textContent = i;
+            grid.appendChild(d);
         }
+        document.getElementById('count-sent').textContent = state.base;
     }
 
-    function drawLine(fromX, toX, y1, y2, labelText, color, isLost) {
+    function drawFlight(fromX, toX, y1, y2, label, color, lost) {
         const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
         const isTx = fromX < toX;
-        const targetX = isLost ? (fromX + toX)/2 : toX;
-        const targetY = isLost ? (y1 + y2)/2 : y2;
+        const actualToX = lost ? (fromX + (toX - fromX) * 0.6) : toX;
+        const actualToY = lost ? (y1 + (y2 - y1) * 0.6) : y2;
 
         line.setAttribute("x1", fromX);
         line.setAttribute("y1", y1);
@@ -429,70 +387,72 @@
         line.setAttribute("y2", y1);
         line.setAttribute("stroke", color);
         line.setAttribute("stroke-width", "2");
-        if (isLost) line.setAttribute("stroke-dasharray", "5,5");
-        line.setAttribute("marker-end", "url(#arrowhead)");
-        line.style.color = color;
+        if(lost) line.setAttribute("stroke-dasharray", "4,4");
+        line.setAttribute("marker-end", "url(#arrow)");
         svg.appendChild(line);
 
-        const label = document.createElement('div');
-        label.className = 'packet-label';
-        label.style.color = color;
-        label.textContent = labelText + (isLost ? " (PERDIDO)" : "");
-        labelsLayer.appendChild(label);
+        const lbl = document.createElement('div');
+        lbl.className = 'packet-label';
+        lbl.style.color = color;
+        lbl.textContent = label;
+        document.getElementById('labels-layer').appendChild(lbl);
 
         let start = null;
-        function animate(timestamp) {
-            if (!start) start = timestamp;
-            const progress = Math.min((timestamp - start) / 1000, 1);
-            const curX = fromX + (targetX - fromX) * progress;
-            const curY = y1 + (targetY - y1) * progress;
-            line.setAttribute("x2", curX);
-            line.setAttribute("y2", curY);
-            label.style.left = (fromX + (curX - fromX)/2 + 10) + 'px';
-            label.style.top = (y1 + (curY - y1)/2 - 10) + 'px';
+        function anim(ts) {
+            if(!start) start = ts;
+            const progress = Math.min((ts - start) / 1000, 1);
+            const cx = fromX + (actualToX - fromX) * progress;
+            const cy = y1 + (actualToY - y1) * progress;
+            line.setAttribute("x2", cx);
+            line.setAttribute("y2", cy);
+            lbl.style.left = (fromX + (cx - fromX)/2 + 10) + 'px';
+            lbl.style.top = (y1 + (cy - y1)/2 - 10) + 'px';
 
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            } else if (!isLost) {
-                if (isTx) onPacketArrival(parseInt(labelText.replace(/\D/g,'')), targetY);
-                else onAckArrival(parseInt(labelText.replace(/\D/g,'')));
+            if(progress < 1) requestAnimationFrame(anim);
+            else {
+                if(!lost) {
+                    if(isTx) onReceivePacket(parseInt(label.substring(1)), actualToY);
+                    else onReceiveAck(parseInt(label.substring(3)));
+                } else {
+                    addLog(`❌ Perdido: ${label}`, 'timeout');
+                }
             }
         }
-        requestAnimationFrame(animate);
+        requestAnimationFrame(anim);
         canvas.scrollTop = y1 - 100;
     }
 
-    function sendPacket(seq, isRetransmit = false) {
-        if (seq >= state.base + config.windowSize && !isRetransmit) return;
+    function sendPacket(seq, isRetry = false) {
+        if (seq >= config.maxPackets) return;
         
-        const isLost = state.nextError === 'pkt';
-        state.nextError = null;
-        document.querySelectorAll('.btn-danger-light').forEach(b => b.classList.remove('active'));
+        const isLost = state.errorNext === 'pkt';
+        if(isLost) state.errorNext = null;
+        updateErrorButtons();
 
-        addLog(`${isRetransmit ? 'Retransmitiendo' : 'Enviando'} Paquete <b>${seq}</b>`, isLost ? 'error' : 'info');
-        
-        drawLine(config.txX, config.rxX, config.y, config.y + config.slope, `P${seq}`, config.mode === 'GBN' ? '#2563eb' : '#7c3aed', isLost);
+        addLog(`${isRetry ? 'Retransmitiendo' : 'Enviando'} P${seq}`, isLost ? 'timeout' : '');
+        drawFlight(config.txX, config.rxX, config.y, config.y + config.slope, `P${seq}`, config.mode === 'GBN' ? '#2563eb' : '#7c3aed', isLost);
         config.y += config.step;
 
         if (config.mode === 'GBN') {
-            if (state.base === seq) startTimer();
+            if(state.base === seq) startTimer();
         } else {
-            startIndividualTimer(seq);
+            startSRTimer(seq);
         }
+        renderWindow();
     }
 
-    function onPacketArrival(seq, y) {
-        if (config.mode === 'GBN') {
-            if (seq === state.expected) {
-                addLog(`Receptor: P${seq} recibido en orden. Enviando ACK${seq}.`, 'success');
+    function onReceivePacket(seq, y) {
+        if(config.mode === 'GBN') {
+            if(seq === state.expected) {
+                addLog(`RX: Recibido P${seq} en orden`, 'ack');
                 state.expected++;
                 sendAck(seq, y);
             } else {
-                addLog(`Receptor: P${seq} fuera de orden (esperaba ${state.expected}). Descartado.`, 'warning');
+                addLog(`RX: P${seq} fuera de orden (esperaba P${state.expected})`);
                 sendAck(state.expected - 1, y);
             }
         } else {
-            addLog(`Receptor: P${seq} recibido.`, 'success');
+            addLog(`RX: Recibido P${seq}`, 'ack');
             state.rxBuffered.add(seq);
             while(state.rxBuffered.has(state.expected)) state.expected++;
             sendAck(seq, y);
@@ -500,118 +460,162 @@
     }
 
     function sendAck(seq, y) {
-        if (seq < 0) return;
-        const isLost = state.nextError === 'ack';
-        state.nextError = null;
-        if (isLost) addLog(`¡Error! El ACK${seq} se perderá en el canal.`, 'error');
-        drawLine(config.rxX, config.txX, y, y + config.slope, `ACK${seq}`, '#10b981', isLost);
+        if(seq < 0) return;
+        const isLost = state.errorNext === 'ack';
+        if(isLost) state.errorNext = null;
+        updateErrorButtons();
+        drawFlight(config.rxX, config.txX, y, y + config.slope, `ACK${seq}`, '#10b981', isLost);
     }
 
-    function onAckArrival(seq) {
-        if (config.mode === 'GBN') {
-            if (seq >= state.base) {
-                addLog(`Emisor: Recibido ACK${seq} acumulativo. Avanzando ventana.`, 'success');
+    function onReceiveAck(seq) {
+        if(config.mode === 'GBN') {
+            if(seq >= state.base) {
                 state.base = seq + 1;
                 state.base === state.nextSeq ? stopTimer() : startTimer();
             }
         } else {
-            addLog(`Emisor: Recibido ACK${seq} individual.`, 'success');
             state.txAcked.add(seq);
             while(state.txAcked.has(state.base)) state.base++;
         }
-        renderWindowUI();
+        renderWindow();
+        checkCompletion();
     }
 
     function startTimer() {
         state.timerStart = Date.now();
-        if (state.timer) clearInterval(state.timer);
+        if(state.timer) clearInterval(state.timer);
         state.timer = setInterval(() => {
             const elapsed = Date.now() - state.timerStart;
-            const progress = (elapsed / config.timeout) * 100;
-            document.getElementById('timer-bar').style.width = Math.min(progress, 100) + '%';
-            if (progress >= 100) {
-                stopTimer();
-                addLog(`¡TIMEOUT! No llegó confirmación de P${state.base}. Reenviando ventana completa.`, 'error');
-                state.nextSeq = state.base;
-                // En GBN, retrocedemos el nextSeq para que el usuario pueda volver a enviar o el modo auto lo haga
-                if (state.auto) {
-                    for(let i = state.base; i < state.nextSeq + config.windowSize; i++) {
-                       // Lógica de reenvío automático se maneja en el loop de auto
-                    }
-                }
-            }
+            const progress = (elapsed / config.timeoutMs) * 100;
+            document.getElementById('timer-progress').style.width = Math.min(progress, 100) + '%';
+            if(progress >= 100) triggerTimeout();
         }, 100);
     }
 
     function stopTimer() {
         clearInterval(state.timer);
         state.timer = null;
-        document.getElementById('timer-bar').style.width = '0%';
+        document.getElementById('timer-progress').style.width = '0%';
     }
 
-    function startIndividualTimer(seq) {
+    function triggerTimeout() {
+        stopTimer();
+        if(config.mode === 'GBN') {
+            addLog(`¡TIMEOUT! GBN reenvía ventana desde P${state.base}`, 'timeout');
+            for(let i = state.base; i < state.nextSeq; i++) {
+                sendPacket(i, true);
+            }
+        } else {
+            addLog(`¡TIMEOUT! SR reenvía P${state.base}`, 'timeout');
+            sendPacket(state.base, true);
+        }
+    }
+
+    function startSRTimer(seq) {
         setTimeout(() => {
-            if (!state.txAcked.has(seq) && config.mode === 'SR') {
-                addLog(`¡TIMEOUT Individual! P${seq} no confirmado. Reenviando solo este paquete.`, 'warning');
+            if(!state.txAcked.has(seq) && config.mode === 'SR') {
+                addLog(`SR Timeout para P${seq}`, 'timeout');
                 sendPacket(seq, true);
             }
-        }, config.timeout);
+        }, config.timeoutMs);
     }
 
-    // Botones
-    document.getElementById('btn-gbn').onclick = function() {
-        config.mode = 'GBN';
-        this.classList.add('active');
-        document.getElementById('btn-sr').classList.remove('active');
-        addLog("Cambiado a modo Go-Back-N.");
-        renderWindowUI();
-    };
+    function checkCompletion() {
+        if(state.base >= config.maxPackets) {
+            addLog("🎉 ¡TRANSFERENCIA COMPLETADA!", "ack");
+            toggleAuto(false);
+        }
+    }
 
-    document.getElementById('btn-sr').onclick = function() {
-        config.mode = 'SR';
-        this.classList.add('active');
-        document.getElementById('btn-gbn').classList.remove('active');
-        addLog("Cambiado a modo Selective Repeat.");
-        stopTimer();
-        renderWindowUI();
-    };
+    function toggleAuto(force) {
+        state.isAuto = force !== undefined ? force : !state.isAuto;
+        const btn = document.getElementById('btn-auto');
+        const icon = document.getElementById('auto-icon');
+        const text = document.getElementById('auto-text');
 
-    document.getElementById('btn-next').onclick = () => {
-        if (state.nextSeq < state.base + config.windowSize) {
-            sendPacket(state.nextSeq++);
-            renderWindowUI();
+        if(state.isAuto) {
+            btn.classList.add('active');
+            icon.textContent = '⏸';
+            text.textContent = 'Pausar Auto';
+            startAutoCycle();
         } else {
-            addLog("Ventana llena. Espera confirmaciones (ACKs).", "warning");
+            btn.classList.remove('active');
+            icon.textContent = '▶';
+            text.textContent = 'Iniciar Auto';
+            clearTimeout(state.autoInterval);
+        }
+    }
+
+    function startAutoCycle() {
+        if(!state.isAuto) return;
+        
+        const speed = parseInt(document.getElementById('auto-speed').value);
+        
+        if(state.nextSeq < state.base + config.windowSize && state.nextSeq < config.maxPackets) {
+            sendPacket(state.nextSeq++);
+        }
+
+        state.autoInterval = setTimeout(startAutoCycle, speed);
+    }
+
+    function updateErrorButtons() {
+        document.getElementById('fail-pkt').classList.toggle('active', state.errorNext === 'pkt');
+        document.getElementById('fail-ack').classList.toggle('active', state.errorNext === 'ack');
+    }
+
+    // Eventos
+    document.getElementById('btn-send').onclick = () => {
+        if(state.nextSeq < state.base + config.windowSize && state.nextSeq < config.maxPackets) {
+            sendPacket(state.nextSeq++);
+        } else {
+            addLog("Ventana bloqueada o fin de datos.");
         }
     };
 
-    document.getElementById('btn-auto').onclick = function() {
-        state.auto = !state.auto;
-        this.textContent = state.auto ? "DETENER" : "MODO AUTO";
-        if(state.auto) {
-            const loop = () => {
-                if(!state.auto) return;
-                if(state.nextSeq < state.base + config.windowSize) {
-                    sendPacket(state.nextSeq++);
-                    renderWindowUI();
-                }
-                setTimeout(loop, 2000);
-            };
-            loop();
-        }
+    document.getElementById('btn-auto').onclick = () => toggleAuto();
+    document.getElementById('btn-timeout').onclick = () => triggerTimeout();
+
+    document.getElementById('mode-gbn').onclick = () => {
+        config.mode = 'GBN';
+        document.getElementById('mode-gbn').classList.add('active');
+        document.getElementById('mode-sr').classList.remove('active');
+        addLog("Modo cambiado a GBN");
+        stopTimer();
+        renderWindow();
     };
 
-    document.getElementById('fail-pkt').onclick = function() { state.nextError = 'pkt'; this.classList.add('active'); addLog("El próximo paquete enviado se perderá."); };
-    document.getElementById('fail-ack').onclick = function() { state.nextError = 'ack'; this.classList.add('active'); addLog("El próximo ACK generado se perderá."); };
-    document.getElementById('clear-log').onclick = () => logContainer.innerHTML = '';
-    document.getElementById('win-range').oninput = function() {
+    document.getElementById('mode-sr').onclick = () => {
+        config.mode = 'SR';
+        document.getElementById('mode-sr').classList.add('active');
+        document.getElementById('mode-gbn').classList.remove('active');
+        addLog("Modo cambiado a SR");
+        stopTimer();
+        renderWindow();
+    };
+
+    document.getElementById('win-size').oninput = function() {
         config.windowSize = parseInt(this.value);
-        document.getElementById('win-val').textContent = this.value;
-        renderWindowUI();
+        document.getElementById('win-label').textContent = this.value;
+        renderWindow();
+    };
+
+    document.getElementById('total-pkts').onchange = function() {
+        config.maxPackets = parseInt(this.value);
+        document.getElementById('count-max').textContent = this.value;
+        renderWindow();
+    };
+
+    document.getElementById('fail-pkt').onclick = () => {
+        state.errorNext = (state.errorNext === 'pkt') ? null : 'pkt';
+        updateErrorButtons();
+    };
+
+    document.getElementById('fail-ack').onclick = () => {
+        state.errorNext = (state.errorNext === 'ack') ? null : 'ack';
+        updateErrorButtons();
     };
 
     init();
 </script>
-
 </body>
 </html>
