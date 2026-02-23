@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Secuencia Go-Back-N</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --card-bg: #f8fafc;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --corrupt: #9333ea; /* Color Púrpura para corruptos */
+            --retry: #f97316;   /* Color Naranja para reintentos */
+            --text: #1e293b;
+            --line: #94a3b8;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f1f5f9;
+            color: var(--text);
+            margin: 0;
+            display: grid;
+            grid-template-columns: 300px 1fr 320px;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Panel Izquierdo: Controles --- */
+        .controls {
+            padding: 24px;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 20;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            overflow-y: auto;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: bold; }
+        .stat-value { font-size: 1.1rem; font-weight: 800; margin-top: 4px; color: var(--primary); }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-step { background: #64748b; color: white; }
+        .btn-danger { background: #fee2e2; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-danger.active { background: var(--danger); color: white; }
+        .btn-corrupt { background: #f3e8ff; border: 1px solid var(--corrupt); color: var(--corrupt); }
+        .btn-corrupt.active { background: var(--corrupt); color: white; }
+        .btn-warning { background: #fef3c7; border: 1px solid var(--warning); color: #92400e; }
+        .btn-ghost { background: #f1f5f9; color: #64748b; }
+
+        /* --- Panel Central: Diagrama --- */
+        .viewport {
+            position: relative;
+            background-color: white;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .lifeline-container {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-around;
+            pointer-events: none;
+        }
+
+        .lifeline {
+            width: 2px;
+            height: 10000px; 
+            border-left: 3px dotted var(--line);
+            position: relative;
+        }
+
+        .node-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 20px 0;
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 1px solid #e2e8f0;
+            z-index: 15;
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        /* --- Estilo de Flechas --- */
+        .arrow-line {
+            stroke-width: 3;
+            fill: none;
+            transition: opacity 0.3s;
+        }
+        .arrow-data { stroke: var(--primary); }
+        .arrow-ack { stroke: var(--success); }
+        .arrow-lost { stroke: var(--danger); stroke-dasharray: 8; opacity: 0.6; }
+        .arrow-corrupt { stroke: var(--corrupt); stroke-dasharray: 4; }
+        .arrow-retry { stroke: var(--retry); }
+
+        .packet-label {
+            position: absolute;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .window-monitor {
+            position: sticky;
+            top: 80px;
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            padding: 10px;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(8px);
+            z-index: 12;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .win-pkt {
+            width: 28px;
+            height: 28px;
+            border: 2px solid #e2e8f0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .win-pkt.in-window { border-color: var(--primary); background: rgba(59, 130, 246, 0.1); color: var(--primary); }
+        .win-pkt.acked { background: var(--success); color: white; border-color: var(--success); }
+
+        /* --- Panel Derecho: Log --- */
+        .log-panel {
+            background: #1e293b;
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #334155;
+        }
+
+        .log-header {
+            padding: 16px;
+            background: #0f172a;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #94a3b8;
+        }
+
+        #log-entries {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.75rem;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        .log-row { margin-bottom: 6px; padding: 4px; border-radius: 4px; }
+        .log-tx { color: #93c5fd; }
+        .log-rx { color: #6ee7b7; }
+        .log-err { color: #fca5a5; }
+        .log-corrupt { color: #d8b4fe; }
+
+        #timer-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 6px;
+            background: var(--warning);
+            width: 0%;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="timer-bar"></div>
+
+    <aside class="controls">
+        <div style="text-align: center;">
+            <h2 style="margin:0; color: var(--primary);">GBN ANALYZER</h2>
+            <small>Protocolo con Lógica Estricta</small>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-label">Punteros (Base | Siguiente)</div>
+            <div id="pointers" class="stat-value">0 | 0</div>
+        </div>
+
+        <div>
+            <label class="stat-label">Tamaño Ventana (N)</label>
+            <input type="range" id="win-input" min="1" max="8" value="4" style="width:100%;">
+        </div>
+
+        <button id="start-btn" class="btn-primary">INICIAR / PAUSAR AUTO</button>
+        <button id="step-btn" class="btn-step">ENVIAR SIGUIENTE (Paso a Paso)</button>
+        
+        <div style="margin-top: 10px;">
+            <div class="stat-label" style="margin-bottom: 5px;">Inyectar Fallos</div>
+            <button id="fail-pkt-btn" class="btn-danger">PERDER PRÓXIMO PKT</button>
+            <button id="fail-ack-btn" class="btn-danger">PERDER PRÓXIMO ACK</button>
+            <button id="corrupt-btn" class="btn-corrupt">CORROMPER PRÓXIMO PKT</button>
+            <button id="force-timeout-btn" class="btn-warning">FORZAR TIMEOUT</button>
+        </div>
+
+        <button id="reset-btn" class="btn-ghost" style="margin-top: 20px;">REINICIAR SIMULACIÓN</button>
+    </aside>
+
+    <main class="viewport" id="viewport">
+        <div class="node-header">
+            <div>EMISOR</div>
+            <div>RECEPTOR</div>
+        </div>
+
+        <div class="lifeline-container">
+            <div class="lifeline"></div>
+            <div class="lifeline"></div>
+        </div>
+
+        <div class="window-monitor" id="window-monitor"></div>
+        
+        <svg id="svg-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 10000px; pointer-events: none;">
+            <defs>
+                <marker id="arrowhead-data" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+                </marker>
+                <marker id="arrowhead-ack" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
+                </marker>
+                <marker id="arrowhead-lost" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+                </marker>
+                <marker id="arrowhead-corrupt" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea" />
+                </marker>
+                <marker id="arrowhead-retry" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#f97316" />
+                </marker>
+            </defs>
+        </svg>
+        <div id="labels-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 10000px; pointer-events: none;"></div>
+    </main>
+
+    <section class="log-panel">
+        <div class="log-header">REGISTRO TÉCNICO DE EVENTOS</div>
+        <div id="log-entries"></div>
+    </section>
+
+    <script>
+        const svgLayer = document.getElementById('svg-layer');
+        const labelsLayer = document.getElementById('labels-layer');
+        const viewport = document.getElementById('viewport');
+
+        const cfg = {
+            widthTx: 0,
+            widthRx: 0,
+            slope: 120,         
+            interval: 2000,
+            timeout: 7000,
+            stepY: 80           
+        };
+
+        let state = {
+            base: 0,
+            nextSeq: 0,
+            expected: 0,
+            windowSize: 4,
+            running: false,
+            nextError: null, // 'lost_pkt', 'lost_ack', 'corrupt'
+            attempts: {}, // Contador de envíos por seq
+            timer: null,
+            timerStart: 0,
+            currentY: 150
+        };
+
+        function init() {
+            updateDimensions();
+            window.addEventListener('resize', updateDimensions);
+            renderWindow();
+            addLog("Sistema Inicializado. Use 'Enviar Siguiente' para empezar paso a paso.");
+        }
+
+        function updateDimensions() {
+            const rect = viewport.getBoundingClientRect();
+            cfg.widthTx = rect.width * 0.25;
+            cfg.widthRx = rect.width * 0.75;
+        }
+
+        function addLog(msg, type = 'tx') {
+            const div = document.createElement('div');
+            div.className = `log-row log-${type}`;
+            div.innerHTML = `<span style="opacity:0.3">[${new Date().toLocaleTimeString().split(' ')[0]}]</span> ${msg}`;
+            document.getElementById('log-entries').appendChild(div);
+        }
+
+        function renderWindow() {
+            const mon = document.getElementById('window-monitor');
+            mon.innerHTML = '';
+            for(let i=0; i < state.base + 12; i++) {
+                const d = document.createElement('div');
+                const isAcked = i < state.base;
+                const isInWindow = i >= state.base && i < state.base + state.windowSize;
+                d.className = 'win-pkt' + (isAcked ? ' acked' : (isInWindow ? ' in-window' : ''));
+                d.textContent = i;
+                mon.appendChild(d);
+            }
+            document.getElementById('pointers').textContent = `${state.base} | ${state.nextSeq}`;
+        }
+
+        function triggerError(type, btnId) {
+            document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+            if(state.nextError === type) {
+                state.nextError = null;
+            } else {
+                state.nextError = type;
+                document.getElementById(btnId).classList.add('active');
+                addLog(`EVENTO PROGRAMADO: El próximo elemento sufrirá ${type.toUpperCase()}`, 'err');
+            }
+        }
+
+        function sendPacket(seq) {
+            if(seq >= state.base + state.windowSize) {
+                addLog(`BLOQUEO: Ventana llena. No se puede enviar P${seq}`, 'err');
+                return;
+            }
+
+            const startY = state.currentY;
+            state.currentY += cfg.stepY;
+            
+            const errType = state.nextError;
+            state.nextError = null;
+            document.querySelectorAll('.btn-danger, .btn-corrupt').forEach(b => b.classList.remove('active'));
+
+            state.attempts[seq] = (state.attempts[seq] || 0) + 1;
+            const isRetry = state.attempts[seq] > 1;
+
+            drawArrow(seq, 'PKT', startY, errType, isRetry);
+            
+            const logMsg = isRetry ? `EMISOR: Reenviando PKT ${seq}` : `EMISOR: Enviando PKT ${seq}`;
+            addLog(logMsg, isRetry ? 'err' : 'tx');
+
+            if(state.base === seq) startTimer();
+        }
+
+        function drawArrow(seq, type, startY, error, isRetry = false) {
+            const isPkt = type === 'PKT';
+            const x1 = isPkt ? cfg.widthTx : cfg.widthRx;
+            const x2 = isPkt ? cfg.widthRx : cfg.widthTx;
+            const y2 = startY + cfg.slope;
+
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            
+            const isLost = (error === 'lost_pkt' && isPkt) || (error === 'lost_ack' && !isPkt);
+            const isCorrupt = (error === 'corrupt' && isPkt);
+
+            const finalX2 = isLost ? (x1 + x2) / 2 : x2;
+            const finalY2 = isLost ? (startY + y2) / 2 : y2;
+
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", startY);
+            line.setAttribute("x2", x1);
+            line.setAttribute("y2", startY);
+            
+            let colorClass = isPkt ? 'arrow-data' : 'arrow-ack';
+            if(isLost) colorClass = 'arrow-lost';
+            if(isCorrupt) colorClass = 'arrow-corrupt';
+            if(isRetry && isPkt) colorClass = 'arrow-retry';
+
+            line.setAttribute("class", `arrow-line ${colorClass}`);
+            
+            let marker = isPkt ? 'data' : 'ack';
+            if(isLost) marker = 'lost';
+            if(isCorrupt) marker = 'corrupt';
+            if(isRetry && isPkt) marker = 'retry';
+            line.setAttribute("marker-end", `url(#arrowhead-${marker})`);
+            
+            svgLayer.appendChild(line);
+
+            let startTime = null;
+            const duration = 1500;
+
+            function animate(now) {
+                if(!startTime) startTime = now;
+                const p = Math.min((now - startTime) / duration, 1);
+                const curX = x1 + (finalX2 - x1) * p;
+                const curY = startY + (finalY2 - startY) * p;
+                
+                line.setAttribute("x2", curX);
+                line.setAttribute("y2", curY);
+
+                if(p < 1) requestAnimationFrame(animate);
+                else {
+                    if(!isLost) {
+                        if(isPkt) onReceivePkt(seq, y2, isCorrupt);
+                        else onReceiveAck(seq);
+                    } else {
+                        addLog(`CANAL: ${type} ${seq} se ha perdido.`, 'err');
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+
+            const label = document.createElement('div');
+            label.className = 'packet-label';
+            label.style.left = (x1 + (finalX2 - x1)/2 - 30) + 'px';
+            label.style.top = (startY + (finalY2 - startY)/2 - 15) + 'px';
+            label.textContent = `${type} ${seq}${isCorrupt ? ' (ERR)' : ''}`;
+            
+            if(isCorrupt) label.style.color = 'var(--corrupt)';
+            else if(isRetry && isPkt) label.style.color = 'var(--retry)';
+            else if(isLost) label.style.color = 'var(--danger)';
+            
+            labelsLayer.appendChild(label);
+            viewport.scrollTop = startY - 100;
+        }
+
+        function onReceivePkt(seq, arrivalY, corrupt) {
+            if(corrupt) {
+                addLog(`RECEPTOR: PKT ${seq} llegó CORRUPTO. Descartando...`, 'corrupt');
+                // En GBN, si hay error se ignora o se reenvía el último ACK válido
+                if(state.expected > 0) drawArrow(state.expected - 1, 'ACK', arrivalY, null);
+                return;
+            }
+
+            if(seq === state.expected) {
+                addLog(`RECEPTOR: PKT ${seq} OK (En orden). Enviando ACK acumulativo.`, 'rx');
+                state.expected++;
+                drawArrow(seq, 'ACK', arrivalY, state.nextError === 'lost_ack' ? 'lost_ack' : null);
+                if(state.nextError === 'lost_ack') state.nextError = null;
+            } else {
+                addLog(`RECEPTOR: PKT ${seq} fuera de orden (esperaba ${state.expected}). Reenviando ACK ${state.expected-1}.`, 'err');
+                if(state.expected > 0) drawArrow(state.expected - 1, 'ACK', arrivalY, null);
+            }
+        }
+
+        function onReceiveAck(seq) {
+            if(seq >= state.base) {
+                const diff = (seq - state.base) + 1;
+                if(diff > 1) {
+                    addLog(`EMISOR: Recibido ACK ${seq} ACUMULATIVO. Confirma hasta el PKT ${seq}.`, 'rx');
+                } else {
+                    addLog(`EMISOR: Recibido ACK ${seq}.`, 'rx');
+                }
+                state.base = seq + 1;
+                renderWindow();
+                if(state.base === state.nextSeq) stopTimer();
+                else startTimer();
+            } else {
+                addLog(`EMISOR: ACK ${seq} duplicado/antiguo ignorado.`, 'tx');
+            }
+        }
+
+        function startTimer() {
+            state.timerStart = Date.now();
+            if(state.timer) clearInterval(state.timer);
+            state.timer = setInterval(() => {
+                const elapsed = Date.now() - state.timerStart;
+                const pct = (elapsed / cfg.timeout) * 100;
+                document.getElementById('timer-bar').style.width = Math.min(pct, 100) + '%';
+                if(pct >= 100) handleTimeout();
+            }, 100);
+        }
+
+        function stopTimer() {
+            clearInterval(state.timer);
+            state.timer = null;
+            document.getElementById('timer-bar').style.width = '0%';
+        }
+
+        function handleTimeout() {
+            addLog(`EMISOR: ¡TIMEOUT! No llegó ACK para PKT ${state.base}. Reenviando ventana...`, 'err');
+            stopTimer();
+            const originalNext = state.nextSeq;
+            state.nextSeq = state.base; // Retroceder al inicio de la ventana
+            
+            // Reenvío de toda la ventana
+            for(let i = 0; i < (originalNext - state.base); i++) {
+                setTimeout(() => {
+                    if(state.nextSeq < state.base + state.windowSize) {
+                        sendPacket(state.nextSeq++);
+                        renderWindow();
+                    }
+                }, i * 400);
+            }
+        }
+
+        // --- Eventos de Interfaz ---
+        document.getElementById('start-btn').onclick = function() {
+            state.running = !state.running;
+            this.textContent = state.running ? "PAUSAR AUTOMÁTICO" : "INICIAR AUTOMÁTICO";
+            this.className = state.running ? "btn-warning" : "btn-primary";
+            if(state.running) autoLoop();
+        };
+
+        function autoLoop() {
+            if(!state.running) return;
+            if(state.nextSeq < state.base + state.windowSize) {
+                sendPacket(state.nextSeq++);
+                renderWindow();
+            }
+            setTimeout(autoLoop, cfg.interval);
+        }
+
+        document.getElementById('step-btn').onclick = () => {
+            if(state.nextSeq < state.base + state.windowSize) {
+                sendPacket(state.nextSeq++);
+                renderWindow();
+            } else {
+                addLog("VENTANA LLENA: No se puede enviar más sin recibir ACKs.", "err");
+            }
+        };
+
+        document.getElementById('fail-pkt-btn').onclick = () => triggerError('lost_pkt', 'fail-pkt-btn');
+        document.getElementById('fail-ack-btn').onclick = () => triggerError('lost_ack', 'fail-ack-btn');
+        document.getElementById('corrupt-btn').onclick = () => triggerError('corrupt', 'corrupt-btn');
+        
+        document.getElementById('force-timeout-btn').onclick = () => {
+            if(state.timer) handleTimeout();
+        };
+
+        document.getElementById('reset-btn').onclick = () => location.reload();
+
+        document.getElementById('win-input').oninput = (e) => {
+            state.windowSize = parseInt(e.target.value);
+            renderWindow();
+        };
+
+        init();
+    </script>
+</body>
+</html>
